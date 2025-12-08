@@ -1,0 +1,13 @@
+{
+  "name": "wayback-scraper",
+  "version": "1.0.0",
+  "description": "Wayback Machine Forensic Scraper - Pure Python Flask project",
+  "scripts": {
+    "dev": "python server.py",
+    "build": "echo 'Pure Python project - no build needed'",
+    "start": "python server.py"
+  },
+  "keywords": ["wayback", "forensic", "scraper", "python", "flask"],
+  "author": "",
+  "license": "MIT"
+}

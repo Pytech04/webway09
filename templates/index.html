@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wayback Forensic Scraper</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>WAYBACK FORENSIC SCRAPER</h1>
+                <p class="subtitle">Search archived snapshots for secrets, malware, and hidden information</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <div class="grid">
+                <!-- Left Column: Form & Use Cases -->
+                <div class="left-column">
+                    <!-- Scan Form -->
+                    <section class="card">
+                        <div class="card-header">
+                            <h2>FORENSIC SCANNER</h2>
+                        </div>
+                        <form id="scanForm" class="form">
+                            <div class="form-group">
+                                <label>Scan Mode</label>
+                                <div style="display: flex; gap: 15px; margin-top: 5px;">
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                        <input type="radio" name="scanMode" value="wayback" checked> Wayback Forensic
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                        <input type="radio" name="scanMode" value="live"> Live Site
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="domain">Target Domain</label>
+                                <input type="text" id="domain" name="domain" placeholder="example.com" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="keyword" id="keywordLabel">Search Pattern / Keyword</label>
+                                <input type="text" id="keyword" name="keyword"
+                                    placeholder="Optional: password, API_KEY or ctf{...">
+                            </div>
+
+                            <div class="form-group" id="cookiesGroup" style="display: none;">
+                                <label for="cookies">Cookies (Optional)</label>
+                                <textarea id="cookies" name="cookies" placeholder="name=value; name2=value2" rows="3"
+                                    style="width: 100%; padding: 8px; border: 1px solid #333; background: #000; color: #0f0; font-family: monospace;"></textarea>
+                            </div>
+
+                            <div id="waybackOptions">
+                                <div class="form-group checkbox-group">
+                                    <input type="checkbox" id="useRegex" name="useRegex">
+                                    <label for="useRegex" style="display: inline; margin-left: 5px;">Use Regex</label>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="year">Year (Optional)</label>
+                                        <input type="text" id="year" name="year" placeholder="2022">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="limit">Snapshot Limit</label>
+                                        <input type="number" id="limit" name="limit" value="100" min="1" max="1000">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary" id="scanBtn">
+                                <span id="btnText">START SCAN</span>
+                                <span id="btnLoader" class="loader hidden"></span>
+                            </button>
+                        </form>
+                    </section>
+
+                    <!-- Use Cases Reference -->
+                    <section class="card">
+                        <div class="card-header">
+                            <h2>USE CASE REFERENCE</h2>
+                        </div>
+                        <div class="use-cases">
+                            <div class="use-case-group">
+                                <h3>DATA LEAKS</h3>
+                                <div class="keywords">password, API_KEY, token, client_secret</div>
+                            </div>
+                            <div class="use-case-group">
+                                <h3>MALWARE INDICATORS</h3>
+                                <div class="keywords">iframe, eval, script, base64</div>
+                            </div>
+                            <div class="use-case-group">
+                                <h3>DEFACEMENT</h3>
+                                <div class="keywords">hacked by, owned, security, pwned</div>
+                            </div>
+                            <div class="use-case-group">
+                                <h3>HIDDEN INFORMATION</h3>
+                                <div class="keywords">ctf{, flag{, TODO, FIXME, admin, debug</div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Resizer Handle -->
+                <div class="resizer" id="resizer"></div>
+
+                <!-- Right Column: Results -->
+                <div class="right-column">
+                    <!-- Progress Section -->
+                    <section class="card" id="progressSection" style="display: none;">
+                        <div class="card-header">
+                            <h2>SCAN PROGRESS</h2>
+                        </div>
+                        <div class="progress-content">
+                            <div class="progress-message" id="progressMessage"></div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill"></div>
+                            </div>
+                            <div class="progress-text">
+                                <span id="progressCount">0 / 0</span> snapshots analyzed
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Results Section -->
+                    <section class="card" id="resultsSection" style="display: none;">
+                        <div class="card-header">
+                            <div class="header-with-btn">
+                                <h2>SCAN RESULTS</h2>
+                                <button type="button" class="btn btn-secondary btn-small" id="downloadBtn">
+                                    DOWNLOAD REPORT
+                                </button>
+                            </div>
+                        </div>
+                        <div class="results-content" id="resultsContent">
+                            <!-- Results will be inserted here -->
+                        </div>
+                    </section>
+
+                    <!-- Empty State -->
+                    <section class="card" id="emptyState"
+                        style="display: flex; align-items: center; justify-content: center; min-height: 300px;">
+                        <div class="empty-message">
+                            <p>Fill in the form and start a scan to see results here</p>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+
+</html>
