@@ -1,0 +1,1 @@
+Updated documentation without AI mentions.
