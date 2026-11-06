@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wayback Forensic Scraper</title>
+    <title>Webway09 — Archived Web Content Scanner</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
@@ -13,8 +13,8 @@
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <h1>WAYBACK FORENSIC SCRAPER</h1>
-                <p class="subtitle">Search archived snapshots for secrets, malware, and hidden information</p>
+                <h1>WEBWAY09</h1>
+                <p class="subtitle">Authorized archived/live content scanner — not a vulnerability scanner</p>
             </div>
         </header>
 
@@ -23,20 +23,25 @@
             <div class="grid">
                 <!-- Left Column: Form & Use Cases -->
                 <div class="left-column">
+                    <div class="warning-banner" role="note">
+                        Only scan systems you own or have written permission to test. Live scanning is a
+                        confirmation gate, not a grant of authorization. Secret-like values are redacted by default.
+                    </div>
+
                     <!-- Scan Form -->
                     <section class="card">
                         <div class="card-header">
-                            <h2>FORENSIC SCANNER</h2>
+                            <h2>CONTENT SCANNER</h2>
                         </div>
                         <form id="scanForm" class="form">
                             <div class="form-group">
                                 <label>Scan Mode</label>
                                 <div style="display: flex; gap: 15px; margin-top: 5px;">
                                     <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
-                                        <input type="radio" name="scanMode" value="wayback" checked> Wayback Forensic
+                                        <input type="radio" name="scanMode" value="wayback" checked> Wayback Archive
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
-                                        <input type="radio" name="scanMode" value="live"> Live Site
+                                        <input type="radio" name="scanMode" value="live"> Live Site (authorized)
                                     </label>
                                 </div>
                             </div>
@@ -56,14 +61,29 @@
                                 <label for="cookies">Cookies (Optional)</label>
                                 <textarea id="cookies" name="cookies" placeholder="name=value; name2=value2" rows="3"
                                     style="width: 100%; padding: 8px; border: 1px solid #333; background: #000; color: #0f0; font-family: monospace;"></textarea>
+                                <p class="hint">Sent in the POST body to the target host only, never in a URL or to a redirect target.</p>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="apiToken">API Token (only if the server requires one)</label>
+                                <input type="password" id="apiToken" name="apiToken" autocomplete="off"
+                                    placeholder="Leave blank for local loopback use">
+                                <p class="hint">Sent as an Authorization: Bearer header; never stored in the URL.</p>
+                            </div>
+
+                            <div class="form-group checkbox-group" id="authorizationGroup" style="display: none;">
+                                <input type="checkbox" id="authorized" name="authorized">
+                                <label for="authorized" style="display: inline; margin-left: 5px;">
+                                    I confirm I am authorized to test this target
+                                </label>
+                            </div>
+
+                            <div class="form-group checkbox-group">
+                                <input type="checkbox" id="useRegex" name="useRegex">
+                                <label for="useRegex" style="display: inline; margin-left: 5px;">Use Regex</label>
                             </div>
 
                             <div id="waybackOptions">
-                                <div class="form-group checkbox-group">
-                                    <input type="checkbox" id="useRegex" name="useRegex">
-                                    <label for="useRegex" style="display: inline; margin-left: 5px;">Use Regex</label>
-                                </div>
-
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label for="year">Year (Optional)</label>
@@ -71,7 +91,7 @@
                                     </div>
                                     <div class="form-group">
                                         <label for="limit">Snapshot Limit</label>
-                                        <input type="number" id="limit" name="limit" value="100" min="1" max="1000">
+                                        <input type="number" id="limit" name="limit" value="100" min="1" max="200">
                                     </div>
                                 </div>
                             </div>
@@ -94,11 +114,11 @@
                                 <div class="keywords">password, API_KEY, token, client_secret</div>
                             </div>
                             <div class="use-case-group">
-                                <h3>MALWARE INDICATORS</h3>
+                                <h3>SUSPICIOUS PATTERNS</h3>
                                 <div class="keywords">iframe, eval, script, base64</div>
                             </div>
                             <div class="use-case-group">
-                                <h3>DEFACEMENT</h3>
+                                <h3>CONTENT CHANGE</h3>
                                 <div class="keywords">hacked by, owned, security, pwned</div>
                             </div>
                             <div class="use-case-group">

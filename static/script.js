@@ -8,9 +8,126 @@ document.addEventListener('DOMContentLoaded', () => {
     const waybackOptions = document.getElementById('waybackOptions');
     const cookiesGroup = document.getElementById('cookiesGroup');
     const keywordLabel = document.getElementById('keywordLabel');
+    const authorizationGroup = document.getElementById('authorizationGroup');
+    const authorizedCheckbox = document.getElementById('authorized');
+    const apiTokenInput = document.getElementById('apiToken');
 
     let currentMatches = [];
     let currentParams = null;
+    let activeController = null;
+
+    function authHeaders(extra = {}) {
+        const token = apiTokenInput ? apiTokenInput.value.trim() : '';
+        return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
+    }
+
+    function setBusy(isBusy) {
+        scanBtn.disabled = isBusy;
+        document.getElementById('btnText').classList.toggle('hidden', isBusy);
+        document.getElementById('btnLoader').classList.toggle('hidden', !isBusy);
+    }
+
+    async function responseError(response) {
+        if (response.status === 401) {
+            return 'Unauthorized: provide a valid API token.';
+        }
+        if (response.status === 429) {
+            return 'Rate limit exceeded. Try again later.';
+        }
+        try {
+            const data = await response.json();
+            return data.error || `Request failed (${response.status})`;
+        } catch {
+            return `Request failed (${response.status})`;
+        }
+    }
+
+    function dispatchScanEvent(data) {
+        if (data.type === 'progress') {
+            updateProgress(data);
+        } else if (data.type === 'match') {
+            currentMatches.push(data.match);
+            addMatchToUI(data.match);
+            showResultsSection();
+        } else if (data.type === 'complete') {
+            completeScan(data.message);
+            return true;
+        } else if (data.type === 'error') {
+            handleError(data.error || 'Scan failed.');
+            return true;
+        }
+        return false;
+    }
+
+    async function streamScan(params) {
+        activeController = new AbortController();
+        let response;
+        try {
+            response = await fetch(`/api/scan?${params}`, {
+                headers: authHeaders(),
+                signal: activeController.signal
+            });
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                handleError('Failed to start scan: ' + error.message);
+            }
+            return;
+        }
+
+        if (!response.ok) {
+            handleError(await responseError(response));
+            return;
+        }
+        if (!response.body) {
+            handleError('Streaming is not supported by this browser.');
+            return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let finished = false;
+
+        try {
+            while (!finished) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+
+                let boundary;
+                while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+                    const event = buffer.slice(0, boundary);
+                    buffer = buffer.slice(boundary + 2);
+                    for (const line of event.split('\n')) {
+                        if (!line.startsWith('data: ')) continue;
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (dispatchScanEvent(data)) {
+                                finished = true;
+                                break;
+                            }
+                        } catch {
+                            // Ignore malformed SSE frames rather than crashing the UI.
+                        }
+                    }
+                    if (finished) break;
+                }
+            }
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                handleError('Lost connection to server.');
+            }
+        } finally {
+            if (finished) {
+                try {
+                    await reader.cancel();
+                } catch {
+                    // The stream may already be closed.
+                }
+            }
+            activeController = null;
+        }
+    }
 
     // Mode Toggle Logic
     document.querySelectorAll('input[name="scanMode"]').forEach(radio => {
@@ -18,11 +135,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target.value === 'live') {
                 waybackOptions.style.display = 'none';
                 cookiesGroup.style.display = 'block';
+                authorizationGroup.style.display = 'flex';
                 keywordLabel.textContent = 'Flag Pattern (e.g. ctf)';
                 document.getElementById('keyword').placeholder = 'ctf';
             } else {
                 waybackOptions.style.display = 'block';
                 cookiesGroup.style.display = 'none';
+                authorizationGroup.style.display = 'none';
                 keywordLabel.textContent = 'Search Pattern / Keyword';
                 document.getElementById('keyword').placeholder = 'password, API_KEY or ctf{...';
             }
@@ -41,39 +160,42 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Keyword is now optional for both modes (Wayback scans for secrets if empty)
+        if (mode === 'live' && !authorizedCheckbox.checked) {
+            alert('Confirm that you are authorized to test this target before running a live scan.');
+            return;
+        }
 
         // Reset UI
-        scanBtn.disabled = true;
-        progressSection.style.display = 'none'; // Default hidden
+        setBusy(true);
+        progressSection.style.display = 'none';
         resultsSection.style.display = 'none';
         emptyState.style.display = 'none';
         resultsContent.innerHTML = '';
-        document.getElementById('btnText').classList.add('hidden');
-        document.getElementById('btnLoader').classList.remove('hidden');
 
         if (mode === 'live') {
             const cookies = document.getElementById('cookies').value.trim();
             const useRegex = document.getElementById('useRegex').checked;
             try {
-                const params = new URLSearchParams({
-                    url: domain,
-                    flag_pattern: keyword,
-                    cookies: cookies,
-                    use_regex: useRegex
+                const response = await fetch('/api/live-scan', {
+                    method: 'POST',
+                    headers: authHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({
+                        url: domain,
+                        flag_pattern: keyword,
+                        cookies: cookies,
+                        use_regex: useRegex,
+                        authorized: true
+                    })
                 });
 
-                const response = await fetch(`/api/live-scan?${params}`);
-                const data = await response.json();
-
-                renderLiveResults(data);
-
+                if (!response.ok) {
+                    throw new Error(await responseError(response));
+                }
+                renderLiveResults(await response.json());
             } catch (error) {
-                handleError(error.message, null);
+                handleError(error.message);
             } finally {
-                scanBtn.disabled = false;
-                document.getElementById('btnText').classList.remove('hidden');
-                document.getElementById('btnLoader').classList.add('hidden');
+                setBusy(false);
             }
             return;
         }
@@ -88,40 +210,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         progressSection.style.display = 'block';
 
-        try {
-            const params = new URLSearchParams({
-                domain,
-                keyword,
-                limit: limit.toString(),
-                use_regex: useRegex.toString(),
-                ...(year && { year })
-            });
+        const params = new URLSearchParams({
+            domain,
+            keyword,
+            limit: limit.toString(),
+            use_regex: useRegex.toString(),
+            ...(year && { year })
+        });
 
-            const eventSource = new EventSource(`/api/scan?${params}`);
-
-            eventSource.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-
-                if (data.type === 'progress') {
-                    updateProgress(data);
-                } else if (data.type === 'match') {
-                    currentMatches.push(data.match);
-                    addMatchToUI(data.match);
-                    showResultsSection();
-                } else if (data.type === 'complete') {
-                    completeyScan(data.message, eventSource);
-                } else if (data.type === 'error') {
-                    handleError(data.error, eventSource);
-                }
-            };
-
-            eventSource.onerror = () => {
-                handleError('Lost connection to server', eventSource);
-            };
-
-        } catch (error) {
-            handleError('Failed to start scan: ' + error.message, null);
-        }
+        await streamScan(params);
     });
 
     function updateProgress(data) {
@@ -144,28 +241,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const matchCard = document.createElement('div');
         matchCard.className = 'match-card';
 
-        const typeColor = getMatchTypeColor(match.matchType);
-
         matchCard.innerHTML = `
             <div class="match-header">
-                <span class="match-timestamp">Snapshot: ${match.timestamp}</span>
-                <span class="match-type">${match.matchType}</span>
+                <span class="match-timestamp">Snapshot: ${escapeHtml(String(match.timestamp || ''))}</span>
+                <span class="match-type">${escapeHtml(String(match.matchType || ''))}</span>
             </div>
             <div class="match-snippet">${escapeHtml(match.snippet)}</div>
             <div class="match-url">
-                <a href="${escapeHtml(match.archiveUrl)}" target="_blank">View Archive</a>
+                <a href="${escapeHtml(match.archiveUrl)}" target="_blank" rel="noopener noreferrer">View Archive</a>
             </div>
         `;
 
         resultsContent.appendChild(matchCard);
     }
 
-    function completeyScan(message, eventSource) {
-        scanBtn.disabled = false;
-        document.getElementById('btnText').classList.remove('hidden');
-        document.getElementById('btnLoader').classList.add('hidden');
-
+    function completeScan(message) {
+        setBusy(false);
         progressSection.style.display = 'none';
+        activeController = null;
 
         if (currentMatches.length === 0) {
             resultsSection.style.display = 'none';
@@ -179,37 +272,24 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             showResultsSection();
         }
-
-        eventSource.close();
     }
 
-    function handleError(message, eventSource) {
-        scanBtn.disabled = false;
-        document.getElementById('btnText').classList.remove('hidden');
-        document.getElementById('btnLoader').classList.add('hidden');
-
+    function handleError(message) {
+        setBusy(false);
         progressSection.style.display = 'none';
         resultsSection.style.display = 'none';
         emptyState.style.display = 'flex';
         emptyState.innerHTML = `
             <div class="empty-message" style="color: #ff4444;">
                 <p>ERROR</p>
-                <p style="color: var(--text-secondary); margin-top: 10px;">${escapeHtml(message)}</p>
+                <p style="color: var(--text-secondary); margin-top: 10px;">${escapeHtml(message || 'Unknown error')}</p>
             </div>
         `;
 
-        if (eventSource) {
-            eventSource.close();
+        if (activeController) {
+            activeController.abort();
+            activeController = null;
         }
-    }
-
-    function getMatchTypeColor(type) {
-        const colors = {
-            'TEXT': '#00ff41',
-            'JS': '#00e5ff',
-            'COMMENT': '#ffaa00'
-        };
-        return colors[type] || '#00ff41';
     }
 
     function escapeHtml(text) {
@@ -222,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('downloadBtn').addEventListener('click', () => {
         if (!currentParams || currentMatches.length === 0) return;
 
-        let report = 'WAYBACK FORENSIC SCAN REPORT\n';
+        let report = 'WEBWAY09 ARCHIVED CONTENT SCAN REPORT\n';
         report += '============================\n\n';
         report += `Target Domain: ${currentParams.domain}\n`;
         report += `Search Keyword: ${currentParams.keyword}\n`;
@@ -372,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${data.deep_results.map(res => `
                         <div style="margin-bottom: 15px; border: 1px solid #333; padding: 10px; border-radius: 4px;">
                             <div style="color: #00e5ff; margin-bottom: 5px; word-break: break-all;">
-                                <a href="${escapeHtml(res.url)}" target="_blank" style="color: #00e5ff; text-decoration: none;">${escapeHtml(res.url)}</a>
+                                <a href="${escapeHtml(res.url)}" target="_blank" rel="noopener noreferrer" style="color: #00e5ff; text-decoration: none;">${escapeHtml(res.url)}</a>
                             </div>
                             
                             ${res.flags && res.flags.length > 0 ? `

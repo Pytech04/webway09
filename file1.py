@@ -1,1 +1,0 @@
-# Updated content without AI mentions.

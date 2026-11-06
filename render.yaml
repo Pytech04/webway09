@@ -1,6 +1,17 @@
 services:
   - type: web
-    name: wayback-scraper
+    name: webway09
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python server.py
+    startCommand: gunicorn server:app --bind 0.0.0.0:$PORT --worker-class gthread --threads 4 --timeout 120
+    envVars:
+      - key: WEBWAY_API_TOKEN
+        sync: false
+      - key: WEBWAY_ALLOWED_ORIGINS
+        sync: false
+      - key: WEBWAY_ALLOW_PRIVATE_HOSTS
+        value: "0"
+      - key: WEBWAY_REVEAL_SECRETS
+        value: "0"
+      - key: FLASK_DEBUG
+        value: "0"
